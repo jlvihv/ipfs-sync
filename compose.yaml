@@ -1,0 +1,19 @@
+version: "3"
+
+services:
+  db:
+    image: mysql:latest
+    environment:
+      MYSQL_DATABASE: "db"
+      MYSQL_USER: "admin"
+      MYSQL_PASSWORD: "admin"
+      MYSQL_ROOT_PASSWORD: "admin"
+    ports:
+      - "${PORT}:3306"
+    expose:
+      - "3306"
+    volumes:
+      - type: bind
+        source: ./data/${PORT}
+        target: /var/lib/mysql
+    user: ${CURRENT_UID}
