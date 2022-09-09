@@ -54,11 +54,11 @@ func (n *AsMaster) checkSlaveStatus() {
 			// 如果离线的是主服务器，将 MainServer 字段置空，为防止多线程冲突，加锁
 			n.Lock()
 			if fmt.Sprintf("%s:%d", node.Host, node.Port) == n.MainServer {
+				fmt.Println("主服务器已离线")
 				n.MainServer = ""
 				n.portOffset += 1
 			}
 			n.Unlock()
-			fmt.Println("主服务器已离线")
 		}
 		return true
 	})
