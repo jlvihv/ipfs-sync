@@ -6,7 +6,6 @@ import (
 	"os"
 	"os/exec"
 	"os/user"
-	"path/filepath"
 	"strings"
 )
 
@@ -17,9 +16,9 @@ type Compose struct {
 	//StartCommand string `json:"start_command,omitempty" form:"start_command"` // 启动命令
 }
 
-func (c *Compose) Start() error {
+func (c *Compose) Start(dir string) error {
 	fmt.Println("启动 docker compose")
-	tool.CheckAndCreateDir(filepath.Join("./data", fmt.Sprintf("%d", c.Port)))
+	tool.CheckAndCreateDir(dir)
 	command := "docker compose up -d"
 	if c.Filename != "" {
 		command = fmt.Sprintf("docker compose -f %s up -d", c.Filename)

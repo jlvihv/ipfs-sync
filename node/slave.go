@@ -7,6 +7,7 @@ import (
 	"github.com/gin-gonic/gin"
 	"io"
 	"net/http"
+	"os"
 	"time"
 )
 
@@ -42,25 +43,23 @@ func (n *AsSlave) task(c *gin.Context) {
 		"message": "ok",
 	})
 	fmt.Printf("接收到主服务器cid: %s\n", t.IPFS.Cid)
-	// 如果需要下载，就得等到下载完成
-	if t.NeedDownload {
+	// 如果任务中的 MainServer 字段为空，则此服务器会承担主服务器的角色
+	if t.MainServer == "" {
+		// 需要下载ipfs中的文件，并启动docker，并定期上传文件夹中的内容
 		n.IsBusy = true
-		fmt.Println("开始下载")
-		t.Download()
-	}
-	if t.NeedExecute {
-		n.IsBusy = true
-		go t.Execute()
-	}
-	if t.NeedUpload {
-		go t.Upload()
-	}
-	go func(t *Task) {
-		for {
-			n.updateLastCid(t.IPFS.Cid)
-			time.Sleep(10 * time.Second)
+		dir := fmt.Sprintf("./data/%d", t.Compose.Port)
+		err := t.Download(dir)
+		if err != nil {
+			fmt.Println("致命错误，ipfs 文件下载失败，无法正常执行，程序退出")
+			os.Exit(1)
 		}
-	}(&t)
+		go t.Execute(dir)
+		cidChan := make(chan string)
+		go t.Upload(dir, cidChan)
+		go n.UpdateLastCid(cidChan)
+	} else {
+		fmt.Println("该服务器不是主服务器，不执行任务")
+	}
 }
 
 // SendRegisterRequest 发送注册请求
@@ -106,6 +105,11 @@ func (n *AsSlave) SendHeartbeatRequestPeriodically() {
 	}
 }
 
-func (n *AsSlave) updateLastCid(cid string) {
-	n.LastIpfsCid = cid
+func (n *AsSlave) UpdateLastCid(cidChan chan string) {
+	for {
+		select {
+		case cid := <-cidChan:
+			n.LastIpfsCid = cid
+		}
+	}
 }

@@ -32,33 +32,36 @@ func (n *AsMaster) StartGin() {
 
 func (n *AsMaster) CheckSlaveStatus() {
 	for {
-		n.registry.Range(func(key, value interface{}) bool {
-			node := value.(*AsSlave)
-			// 已离线的就不管了
-			if node.Status != StatusOnline {
-				return true
-			}
-			if time.Now().Unix()-node.LastHeartbeatTime > OverduePeriod*(node.OverdueTimes+1) {
-				node.OverdueTimes += 1
-				fmt.Printf("node %s:%d overdue %d times\n", node.Host, node.Port, node.OverdueTimes)
-			}
-			if node.OverdueTimes >= MaximumOverdueTimes {
-				node.Status = StatusOffline
-				fmt.Printf("node %s:%d is offline\n", node.Host, node.Port)
-				// 如果离线的是主服务器，将 MainServer 字段置空
-				if fmt.Sprintf("%s:%d", node.Host, node.Port) == n.MainServer {
-					fmt.Println("主服务器已离线")
-					n.Lock()
-					n.MainServer = ""
-					n.portOffset += 1
-					n.Unlock()
-				}
-				n.registry.Delete(fmt.Sprintf("%s:%d", node.Host, node.Port))
-			}
-			return true
-		})
+		n.checkSlaveStatus()
 		time.Sleep(10 * time.Second)
 	}
+}
+
+func (n *AsMaster) checkSlaveStatus() {
+	n.registry.Range(func(key, value interface{}) bool {
+		node := value.(*AsSlave)
+		// 已离线的就不管了
+		if node.Status != StatusOnline {
+			return true
+		}
+		if time.Now().Unix()-node.LastHeartbeatTime > OverduePeriod*(node.OverdueTimes+1) {
+			node.OverdueTimes += 1
+			fmt.Printf("node %s overdue %d times\n", key, node.OverdueTimes)
+		}
+		if node.OverdueTimes >= MaximumOverdueTimes {
+			node.Status = StatusOffline
+			fmt.Printf("node %s is offline\n", key)
+			// 如果离线的是主服务器，将 MainServer 字段置空，为防止多线程冲突，加锁
+			n.Lock()
+			if fmt.Sprintf("%s:%d", node.Host, node.Port) == n.MainServer {
+				n.MainServer = ""
+				n.portOffset += 1
+			}
+			n.Unlock()
+			fmt.Println("主服务器已离线")
+		}
+		return true
+	})
 }
 
 // DispatchTask 派发任务
@@ -72,61 +75,53 @@ func (n *AsMaster) DispatchTask() {
 	}
 	composeContent := string(b)
 	for {
-		// 构建 task
-		task := &Task{
-			Compose: docker.Compose{
-				Content:  composeContent,
-				Filename: "compose-1.yaml",
-				Port:     40000 + n.portOffset,
-				//StartCommand: "docker compose up -d",
-			},
-			IPFS: ipfs.IPFS{},
-		}
-		// 向从节点发送task请求
-		if n.MainServer == "" {
-			task.NeedUpload = true
-			task.NeedExecute = true
-			if n.LastIpfsCid != "" {
-				task.NeedDownload = true
-				task.IPFS.Cid = n.LastIpfsCid
-				task.IPFS.Filename = fmt.Sprintf("%d", task.Compose.Port)
-			}
-		} else {
-			task.NeedUpload = false
-			task.NeedExecute = false
-			task.NeedDownload = false
-			task.IPFS.Cid = n.LastIpfsCid
-		}
-		n.registry.Range(func(key, value interface{}) bool {
-			node := value.(*AsSlave)
-			if node.Status != StatusOnline || node.IsBusy {
-				//fmt.Printf("node %s:%d is busy or offline\n", node.Host, node.Port)
-				return true
-			}
-			// 发送请求
-			body, _ := json.Marshal(task)
-			fmt.Printf("send task to %s:%d\n", node.Host, node.Port)
-			resp, err := http.Post(fmt.Sprintf("http://%s:%d/task", node.Host, node.Port), "application/json", bytes.NewBuffer(body))
-			if err != nil {
-				fmt.Printf("send task to node failed: %s\n", err)
-				return true
-			}
-			body, err = io.ReadAll(resp.Body)
-			if err != nil {
-				fmt.Printf("send task to node failed: %s\n", err)
-				return true
-			}
-			fmt.Println(string(body))
-			n.Lock()
-			if n.MainServer == "" {
-				fmt.Printf("%s:%d 将作为主服务器\n", node.Host, node.Port)
-				n.MainServer = fmt.Sprintf("%s:%d", node.Host, node.Port)
-			}
-			n.Unlock()
-			return true
-		})
+		n.dispatchTask(composeContent, 40000+n.portOffset)
 		time.Sleep(10 * time.Second)
 	}
+}
+
+func (n *AsMaster) dispatchTask(composeContent string, port int) {
+	// 构建 task
+	task := &Task{
+		MainServer: n.MainServer,
+		Compose: docker.Compose{
+			Content:  composeContent,
+			Filename: "compose.yaml",
+			Port:     port,
+		},
+		IPFS: ipfs.IPFS{
+			Cid: n.LastIpfsCid,
+		},
+	}
+	// 向从节点发送task请求
+	n.registry.Range(func(key, value interface{}) bool {
+		node := value.(*AsSlave)
+		// 如果已离线或已有任务，就不派发任务
+		if node.Status != StatusOnline || node.IsBusy {
+			return true
+		}
+		// 发送请求
+		body, _ := json.Marshal(task)
+		fmt.Printf("send task to %s\n", key)
+		resp, err := http.Post(fmt.Sprintf("http://%s/task", key), "application/json", bytes.NewBuffer(body))
+		if err != nil {
+			fmt.Printf("send task to node failed: %s\n", err)
+			return true
+		}
+		body, err = io.ReadAll(resp.Body)
+		if err != nil {
+			fmt.Printf("send task to node failed: %s\n", err)
+			return true
+		}
+		fmt.Println(string(body))
+		n.Lock()
+		if n.MainServer == "" {
+			n.MainServer = fmt.Sprintf("%s", key)
+			fmt.Printf("%s 将作为主服务器\n", key)
+		}
+		n.Unlock()
+		return true
+	})
 }
 
 // 处理注册请求
@@ -191,9 +186,4 @@ func (n *AsMaster) refreshSlaveStatus(slaveNode *AsSlave, slave *AsSlave) {
 			fmt.Printf("主服务器的 IPFS CID 更新为 %s\n", n.LastIpfsCid)
 		}
 	}
-}
-
-type RelationshipGraph struct {
-	Master Node
-	Nodes  []Node
 }

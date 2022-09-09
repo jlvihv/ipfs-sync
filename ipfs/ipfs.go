@@ -4,7 +4,6 @@ import (
 	"fmt"
 	ipfsapi "github.com/ipfs/go-ipfs-api"
 	"master/tool"
-	"path/filepath"
 )
 
 type IPFS struct {
@@ -29,16 +28,12 @@ func (i *IPFS) AddDir(dir string) (cid string, err error) {
 	return
 }
 
-func (i *IPFS) Get(cid string) error {
+func (i *IPFS) Get(cid string, outDir string) error {
 	if i.sh == nil {
 		return fmt.Errorf("ipfs shell 未连接")
 	}
 	if cid == i.lastCid {
 		return nil
-	}
-	outDir := filepath.Join("./data/ipfs", cid)
-	if i.Filename != "" {
-		outDir = filepath.Join("./data", i.Filename)
 	}
 	tool.CheckAndCreateDir(outDir)
 	err := i.sh.Get(cid, outDir)
@@ -46,6 +41,6 @@ func (i *IPFS) Get(cid string) error {
 		return err
 	}
 	i.lastCid = cid
-	fmt.Printf("已从 ipfs 获取文件夹，cid: %s\n", cid)
+	fmt.Printf("已从 ipfs 获取文件夹到 %s，cid: %s\n", outDir, cid)
 	return nil
 }
