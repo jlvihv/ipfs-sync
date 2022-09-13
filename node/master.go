@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
-	"github.com/gin-gonic/gin"
 	"io"
 	"master/docker"
 	"master/ipfs"
@@ -12,11 +11,13 @@ import (
 	"os"
 	"sync"
 	"time"
+
+	"github.com/gin-gonic/gin"
 )
 
 type AsMaster struct {
 	sync.Mutex
-	MainServer  string // 主服务器，主服务器的文件会上传到ipfs,其他服务器只会从ipfs下载，而不会上传
+	MainServer  string // 主服务器，主服务器的文件会上传到 ipfs，其他服务器只会从 ipfs 下载，而不会上传
 	LastIpfsCid string
 	Port        int
 	registry    sync.Map // 注册表
@@ -93,7 +94,7 @@ func (n *AsMaster) dispatchTask(composeContent string, port int) {
 			Cid: n.LastIpfsCid,
 		},
 	}
-	// 向从节点发送task请求
+	// 向从节点发送 task 请求
 	n.registry.Range(func(key, value interface{}) bool {
 		node := value.(*AsSlave)
 		// 如果已离线或已有任务，就不派发任务

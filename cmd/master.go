@@ -2,8 +2,9 @@ package cmd
 
 import (
 	"fmt"
-	"github.com/spf13/cobra"
 	"master/node"
+
+	"github.com/spf13/cobra"
 )
 
 var masterCmd = &cobra.Command{
@@ -16,7 +17,7 @@ var masterCmd = &cobra.Command{
 func masterRun() {
 	fmt.Println("作为主节点启动")
 	n := node.Node{Identity: node.MasterNode, AsMaster: node.AsMaster{Port: masterPort}}
-	// 启动主节点的gin
+	// 启动主节点的 gin
 	go n.AsMaster.StartGin()
 	// 周期性检查从节点状态
 	go n.AsMaster.CheckSlaveStatus()

@@ -43,7 +43,7 @@ func (t *Task) Download(dir string) error {
 }
 
 func (t *Task) Upload(dir string, cidChan chan string) {
-	time.Sleep(20 * time.Second) // 等20秒以后再上传
+	time.Sleep(20 * time.Second) // 等 20 秒以后再上传
 	t.IPFS.Connect("http://localhost:5001")
 	for {
 		path := filepath.Join(dir)
@@ -59,7 +59,7 @@ func (t *Task) Upload(dir string, cidChan chan string) {
 }
 
 func (t *Task) writeComposeToFile() error {
-	// 把字符串形式的compose写入到文件中
+	// 把字符串形式的 compose 写入到文件中
 	if err := os.WriteFile(t.Compose.Filename, []byte(t.Compose.Content), 0644); err != nil {
 		fmt.Printf("写入 compose 文件失败: %s\n", err)
 		return err

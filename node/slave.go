@@ -4,16 +4,17 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
-	"github.com/gin-gonic/gin"
 	"io"
 	"net/http"
 	"os"
 	"time"
+
+	"github.com/gin-gonic/gin"
 )
 
 type AsSlave struct {
 	MasterAddr        string     `json:"master_addr,omitempty"`         // 主节点地址
-	Host              string     `json:"host,omitempty"`                // 从节点host
+	Host              string     `json:"host,omitempty"`                // 从节点 host
 	Port              int        `json:"port,omitempty"`                // 从节点端口
 	Status            StatusCode `json:"status,omitempty"`              // 从节点状态
 	LastHeartbeatTime int64      `json:"last_heartbeat_time,omitempty"` // 从节点最后一次心跳时间
@@ -29,7 +30,7 @@ func (n *AsSlave) StartGin() {
 	r.Run(fmt.Sprintf(":%d", n.Port))
 }
 
-// 处理task
+// 处理 task
 func (n *AsSlave) task(c *gin.Context) {
 	var t Task
 	err := c.ShouldBindJSON(&t)
@@ -45,7 +46,7 @@ func (n *AsSlave) task(c *gin.Context) {
 	fmt.Printf("接收到主服务器cid: %s\n", t.IPFS.Cid)
 	// 如果任务中的 MainServer 字段为空，则此服务器会承担主服务器的角色
 	if t.MainServer == "" {
-		// 需要下载ipfs中的文件，并启动docker，并定期上传文件夹中的内容
+		// 需要下载 ipfs 中的文件，并启动 docker，并定期上传文件夹中的内容
 		n.IsBusy = true
 		dir := fmt.Sprintf("./data/%d", t.Compose.Port)
 		err := t.Download(dir)
@@ -107,9 +108,7 @@ func (n *AsSlave) SendHeartbeatRequestPeriodically() {
 
 func (n *AsSlave) UpdateLastCid(cidChan chan string) {
 	for {
-		select {
-		case cid := <-cidChan:
-			n.LastIpfsCid = cid
-		}
+		cid := <-cidChan
+		n.LastIpfsCid = cid
 	}
 }
